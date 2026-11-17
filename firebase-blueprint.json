@@ -1,0 +1,344 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered IPTV customer profile containing contact details for automated Xtream dispatch.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 160
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 32
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "fullName", "email", "phone", "createdAt", "updatedAt"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "IPTV subscription order with auto-generated Xtream Codes credentials and admin approval lifecycle.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userEmail": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "userName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "userPhone": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "planId": {
+          "type": "string",
+          "enum": ["weekly-standard", "weekly-pro", "monthly-standard", "monthly-vip"],
+          "maxLength": 40
+        },
+        "planName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "billingCycle": {
+          "type": "string",
+          "enum": ["weekly", "monthly"],
+          "maxLength": 16
+        },
+        "durationDays": {
+          "type": "number"
+        },
+        "priceAzn": {
+          "type": "number"
+        },
+        "maxConnections": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "active", "rejected", "expired"],
+          "maxLength": 20
+        },
+        "xtreamHost": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "xtreamUsername": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_]+$"
+        },
+        "xtreamPassword": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_]+$"
+        },
+        "m3uUrl": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "paymentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["card", "m10", "usdt"],
+          "maxLength": 20
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["paid", "refunded"],
+          "maxLength": 20
+        },
+        "adminNote": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "activatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "expiresAt": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "userEmail",
+        "userName",
+        "userPhone",
+        "planId",
+        "planName",
+        "billingCycle",
+        "durationDays",
+        "priceAzn",
+        "maxConnections",
+        "status",
+        "xtreamHost",
+        "xtreamUsername",
+        "xtreamPassword",
+        "m3uUrl",
+        "paymentId",
+        "paymentMethod",
+        "paymentStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Automated payment gateway transaction record linked to a subscription.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subscriptionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "planId": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "planName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "amountAzn": {
+          "type": "number"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["card", "m10", "usdt"],
+          "maxLength": 20
+        },
+        "methodLabel": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "transactionRef": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "maskedDetails": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "enum": ["paid", "refunded"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "subscriptionId",
+        "planId",
+        "planName",
+        "amountAzn",
+        "method",
+        "methodLabel",
+        "transactionRef",
+        "maskedDetails",
+        "status",
+        "createdAt"
+      ]
+    },
+    "DispatchNotification": {
+      "title": "DispatchNotification",
+      "description": "Automated Xtream Codes credential delivery and activation notifications.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subscriptionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["auto_dispatch", "admin_approval"],
+          "maxLength": 32
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "xtreamUsername": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "userId", "subscriptionId", "channel", "title", "message", "xtreamUsername", "createdAt"]
+    },
+    "AdminMember": {
+      "title": "AdminMember",
+      "description": "Authorized platform administrator document keyed by UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private customer profile information isolated per user UID and accessible only by owner or admin."
+    },
+    "/subscriptions/{subscriptionId}": {
+      "schema": { "$ref": "#/entities/Subscription" },
+      "description": "IPTV subscriptions with auto-generated Xtream Codes credentials; created in pending status and activated only by admin."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentRecord" },
+      "description": "Automated payment receipts linked to user subscriptions."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/DispatchNotification" },
+      "description": "Automated Xtream Codes dispatch and admin activation messages."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminMember" },
+      "description": "Platform administrator accounts."
+    }
+  }
+}

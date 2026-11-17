@@ -1,0 +1,233 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'camalmanafov022@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidUserProfile(data, uid) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'phone', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'fullName', 'email', 'phone', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == uid
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 32
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSubscription(data, subId) {
+      return data.keys().hasAll([
+          'id', 'userId', 'userEmail', 'userName', 'userPhone',
+          'planId', 'planName', 'billingCycle', 'durationDays',
+          'priceAzn', 'maxConnections', 'status', 'xtreamHost',
+          'xtreamUsername', 'xtreamPassword', 'm3uUrl', 'paymentId',
+          'paymentMethod', 'paymentStatus', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'userId', 'userEmail', 'userName', 'userPhone',
+          'planId', 'planName', 'billingCycle', 'durationDays',
+          'priceAzn', 'maxConnections', 'status', 'xtreamHost',
+          'xtreamUsername', 'xtreamPassword', 'm3uUrl', 'paymentId',
+          'paymentMethod', 'paymentStatus', 'adminNote', 'createdAt',
+          'updatedAt', 'activatedAt', 'expiresAt'
+        ])
+        && isValidId(data.id)
+        && data.id == subId
+        && isValidId(data.userId)
+        && data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 160
+        && data.userName is string && data.userName.size() >= 2 && data.userName.size() <= 120
+        && data.userPhone is string && data.userPhone.size() >= 6 && data.userPhone.size() <= 32
+        && data.planId in ['weekly-standard', 'weekly-pro', 'monthly-standard', 'monthly-vip']
+        && data.planName is string && data.planName.size() >= 2 && data.planName.size() <= 80
+        && data.billingCycle in ['weekly', 'monthly']
+        && data.durationDays is number && (data.durationDays == 7 || data.durationDays == 30)
+        && data.priceAzn is number && data.priceAzn > 0 && data.priceAzn <= 500
+        && data.maxConnections is number && data.maxConnections >= 1 && data.maxConnections <= 5
+        && data.status in ['pending', 'active', 'rejected', 'expired']
+        && data.xtreamHost is string && data.xtreamHost.size() >= 4 && data.xtreamHost.size() <= 256
+        && data.xtreamUsername is string && data.xtreamUsername.size() >= 4 && data.xtreamUsername.size() <= 40 && data.xtreamUsername.matches('^[a-zA-Z0-9_]+$')
+        && data.xtreamPassword is string && data.xtreamPassword.size() >= 6 && data.xtreamPassword.size() <= 40 && data.xtreamPassword.matches('^[a-zA-Z0-9_]+$')
+        && data.m3uUrl is string && data.m3uUrl.size() >= 8 && data.m3uUrl.size() <= 512
+        && isValidId(data.paymentId)
+        && data.paymentMethod in ['card', 'm10', 'usdt']
+        && data.paymentStatus in ['paid', 'refunded']
+        && (!('adminNote' in data) || (data.adminNote is string && data.adminNote.size() <= 300))
+        && (!('activatedAt' in data) || (data.activatedAt is string && data.activatedAt.size() <= 64))
+        && (!('expiresAt' in data) || (data.expiresAt is string && data.expiresAt.size() <= 64))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPayment(data, payId) {
+      return data.keys().hasAll([
+          'id', 'userId', 'subscriptionId', 'planId', 'planName',
+          'amountAzn', 'method', 'methodLabel', 'transactionRef',
+          'maskedDetails', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'userId', 'subscriptionId', 'planId', 'planName',
+          'amountAzn', 'method', 'methodLabel', 'transactionRef',
+          'maskedDetails', 'status', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && data.id == payId
+        && isValidId(data.userId)
+        && isValidId(data.subscriptionId)
+        && data.planId is string && data.planId.size() <= 40
+        && data.planName is string && data.planName.size() <= 80
+        && data.amountAzn is number && data.amountAzn > 0 && data.amountAzn <= 500
+        && data.method in ['card', 'm10', 'usdt']
+        && data.methodLabel is string && data.methodLabel.size() >= 2 && data.methodLabel.size() <= 64
+        && data.transactionRef is string && data.transactionRef.size() >= 4 && data.transactionRef.size() <= 64
+        && data.maskedDetails is string && data.maskedDetails.size() >= 2 && data.maskedDetails.size() <= 64
+        && data.status in ['paid', 'refunded']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data, notifId) {
+      return data.keys().hasAll(['id', 'userId', 'subscriptionId', 'channel', 'title', 'message', 'xtreamUsername', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'subscriptionId', 'channel', 'title', 'message', 'xtreamUsername', 'createdAt'])
+        && isValidId(data.id)
+        && data.id == notifId
+        && isValidId(data.userId)
+        && isValidId(data.subscriptionId)
+        && data.channel in ['auto_dispatch', 'admin_approval']
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 140
+        && data.message is string && data.message.size() >= 2 && data.message.size() <= 600
+        && data.xtreamUsername is string && data.xtreamUsername.size() >= 4 && data.xtreamUsername.size() <= 40
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isVerified()
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerified()
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'phone', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow get: if isValidId(subscriptionId) && (
+        (isSignedIn() && existing().userId == request.auth.uid) || isAdmin()
+      );
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(subscriptionId)
+        && isVerified()
+        && isValidSubscription(incoming(), subscriptionId)
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().paymentStatus == 'paid'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/payments/$(incoming().paymentId));
+      allow update: if isValidId(subscriptionId)
+        && isVerified()
+        && isValidSubscription(incoming(), subscriptionId)
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().xtreamUsername == existing().xtreamUsername
+        && incoming().paymentId == existing().paymentId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && isAdmin()
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'paymentStatus', 'adminNote', 'activatedAt', 'expiresAt', 'updatedAt'
+        ]);
+      allow delete: if isValidId(subscriptionId) && isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && (
+        (isSignedIn() && existing().userId == request.auth.uid) || isAdmin()
+      );
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(paymentId)
+        && isVerified()
+        && isValidPayment(incoming(), paymentId)
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'paid'
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/subscriptions/$(incoming().subscriptionId));
+      allow update: if isValidId(paymentId)
+        && isVerified()
+        && isAdmin()
+        && isValidPayment(incoming(), paymentId)
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().subscriptionId == existing().subscriptionId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isValidId(paymentId) && isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && (
+        (isSignedIn() && existing().userId == request.auth.uid) || isAdmin()
+      );
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(notificationId)
+        && isVerified()
+        && isValidNotification(incoming(), notificationId)
+        && incoming().createdAt == request.time
+        && (
+          isAdmin() ||
+          (incoming().userId == request.auth.uid && incoming().channel == 'auto_dispatch')
+        );
+      allow update: if false;
+      allow delete: if isValidId(notificationId) && isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+  }
+}

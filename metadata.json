@@ -1,0 +1,6 @@
+{
+  "name": "XəzərStream IPTV",
+  "description": "Həftəlik və aylıq paketlər, avtomatik Xtream Codes aktivasiyası, onlayn ödənişlər və 1200+ canlı kanal siyahısı ilə IPTV platforması.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
