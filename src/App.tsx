@@ -10,6 +10,10 @@ import {
 import { Check, ArrowRight, Tv, ShieldCheck, Zap, CreditCard } from 'lucide-react';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from './lib/firebase';
 import { syncBatchToServer, syncSubscriptionToServer } from './lib/xtreamUtils';
+import { fetchChannelsWithFallback } from './lib/m3uClient';
+import heroCinemaImg from './assets/images/hero_iptv_cinema_1794949153123.jpg';
+import sportsStadiumImg from './assets/images/sports_live_stadium_1794949152098.jpg';
+import cinemaLoungeImg from './assets/images/cinema_4k_lounge_1794949152320.jpg';
 import {
   ADMIN_EMAIL,
   BillingCycle,
@@ -84,16 +88,11 @@ function AppContent() {
 
   const isAdmin = Boolean(user && user.email === ADMIN_EMAIL && user.emailVerified);
 
-  const fetchChannels = useCallback(async (force = false) => {
+  const fetchChannels = useCallback(async (_force = false) => {
     setChannelsLoading(true);
     setChannelsError(null);
     try {
-      const res = await fetch(force ? '/api/channels?refresh=1' : '/api/channels');
-      if (!res.ok) throw new Error('Kanal siyahısı yüklənə bilmədi.');
-      const data = (await res.json()) as {
-        channels: ChannelItem[];
-        categories: CategoryItem[];
-      };
+      const data = await fetchChannelsWithFallback();
       setChannels(data.channels || []);
       setCategories(data.categories || []);
     } catch (err) {
@@ -363,7 +362,7 @@ function AppContent() {
                 <div className="lg:col-span-6">
                   <div className="relative h-72 sm:h-96 lg:h-full min-h-[340px] rounded-xl overflow-hidden border border-white/10 bg-[#11151E]">
                     <img
-                      src="/src/assets/images/hero_iptv_cinema_1794949153123.jpg"
+                      src={heroCinemaImg}
                       alt="Müasir ev kinoteatrında canlı 4K futbol yayımı"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
@@ -587,7 +586,7 @@ function AppContent() {
                   <div className="flex flex-col bg-[#11151E] border border-white/10 rounded-xl overflow-hidden">
                     <div className="aspect-[4/3] bg-[#090B10] overflow-hidden">
                       <img
-                        src="/src/assets/images/sports_live_stadium_1794949152098.jpg"
+                        src={sportsStadiumImg}
                         alt="Canlı idman və futbol kanalları"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
@@ -609,7 +608,7 @@ function AppContent() {
                   <div className="flex flex-col bg-[#11151E] border border-white/10 rounded-xl overflow-hidden">
                     <div className="aspect-[4/3] bg-[#090B10] overflow-hidden">
                       <img
-                        src="/src/assets/images/cinema_4k_lounge_1794949152320.jpg"
+                        src={cinemaLoungeImg}
                         alt="4K film və serial kanalları"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"

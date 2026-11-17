@@ -29,6 +29,7 @@ import {
   getRemainingDays,
   syncSubscriptionToServer,
 } from '../lib/xtreamUtils';
+import { downloadDirectM3uFile } from '../lib/m3uClient';
 
 interface UserDashboardProps {
   user: User | null;
@@ -94,6 +95,15 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
       const localRes = await fetch(
         `/player_api.php?username=${encodeURIComponent(sub.xtreamUsername)}&password=${encodeURIComponent(sub.xtreamPassword)}`
       );
+      const contentType = localRes.headers.get('content-type') || '';
+      if (!localRes.ok || !contentType.includes('application/json')) {
+        setDiagResult({
+          ok: false,
+          message:
+            'Sayt hazırda statik hostinqdə (məs. GitHub Pages) işləyir — burada PHP/Node Xtream API serveri yoxdur. Bunun əvəzinə "Birbaşa M3U Faylı Yüklə" düyməsini sıxıb faylı endirin və VLC / Televizo / TiviMate-də dərhal açın.',
+        });
+        return;
+      }
       const localJson = (await localRes.json()) as {
         user_info?: { auth?: number; message?: string };
       };
@@ -202,9 +212,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
     activeSub.xtreamUsername,
     activeSub.xtreamPassword
   );
-  const directExportM3uUrl = `/api/channels/export-m3u?username=${encodeURIComponent(
-    activeSub.xtreamUsername
-  )}&password=${encodeURIComponent(activeSub.xtreamPassword)}`;
 
   return (
     <section className="py-10 px-6 max-w-[1200px] mx-auto space-y-8">
@@ -362,14 +369,14 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
             </div>
             <div className="flex items-center gap-2">
               {activeSub.status === 'active' && (
-                <a
-                  href={directExportM3uUrl}
-                  download={`xazarstream_direct_${activeSub.xtreamUsername}.m3u`}
+                <button
+                  type="button"
+                  onClick={() => void downloadDirectM3uFile(activeSub.xtreamUsername)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors whitespace-nowrap shrink-0"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Birbaşa M3U Faylı Yüklə</span>
-                </a>
+                </button>
               )}
               <button
                 type="button"
