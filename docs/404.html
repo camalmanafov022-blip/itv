@@ -15,8 +15,8 @@
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-DAP68Lg2.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DcZJiS7d.css">
+    <script type="module" crossorigin src="./assets/index-DjQDMpTw.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-j7AuxiEo.css">
   </head>
   <body style="background-color:#090B10;color:#F3F4F6;margin:0" class="bg-[#090B10] text-[#F3F4F6] antialiased selection:bg-amber-500/30 selection:text-amber-100">
     <div id="root">
@@ -36,38 +36,71 @@
     </div>
     <script>
       window.__bootErrors = [];
-      window.addEventListener(
-        'error',
-        function (e) {
-          var target = e && e.target;
-          if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
-            window.__bootErrors.push('Fayl yüklənmədi: ' + (target.src || target.href || target.tagName));
-          } else {
-            window.__bootErrors.push((e && e.message) || 'Script load error');
-          }
-        },
-        true
-      );
-      window.addEventListener('unhandledrejection', function (e) {
-        var reason = e && e.reason;
-        window.__bootErrors.push((reason && reason.message) || String(reason || 'Unhandled promise rejection'));
-      });
-      function showBootFallbackIfUnmounted() {
-        var el = document.getElementById('boot-fallback');
-        if (el) {
-          el.style.display = 'flex';
-          var log = document.getElementById('boot-error-log');
-          if (log) {
-            log.textContent = window.__bootErrors.length
-              ? window.__bootErrors.join('\n')
-              : 'React quraşdırılmadı. URL: ' + window.location.href;
+      (function () {
+        var hasRawEntry = !!document.querySelector('script[src*="/src/main.tsx"]');
+        var redirectTried = false;
+
+        function tryRedirectToBuiltDocs() {
+          if (redirectTried || !hasRawEntry || window.__APP_MOUNTED__) return;
+          if (window.location.pathname.indexOf('/docs/') !== -1) return;
+          redirectTried = true;
+          fetch('./docs/index.html', { cache: 'no-store' })
+            .then(function (res) {
+              if (!res.ok) return '';
+              return res.text();
+            })
+            .then(function (html) {
+              if (html && html.indexOf('./assets/index-') !== -1 && !window.__APP_MOUNTED__) {
+                window.location.replace('./docs/' + window.location.search + window.location.hash);
+              }
+            })
+            .catch(function () {});
+        }
+
+        window.addEventListener(
+          'error',
+          function (e) {
+            var target = e && e.target;
+            if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+              var src = target.src || target.href || target.tagName;
+              window.__bootErrors.push('Fayl yüklənmədi: ' + src);
+              if (src.indexOf('main.tsx') !== -1) {
+                tryRedirectToBuiltDocs();
+              }
+            } else {
+              window.__bootErrors.push((e && e.message) || 'Script load error');
+            }
+          },
+          true
+        );
+
+        window.addEventListener('unhandledrejection', function (e) {
+          var reason = e && e.reason;
+          window.__bootErrors.push((reason && reason.message) || String(reason || 'Unhandled promise rejection'));
+        });
+
+        function showBootFallbackIfUnmounted() {
+          if (window.__APP_MOUNTED__) return;
+          var el = document.getElementById('boot-fallback');
+          if (el) {
+            el.style.display = 'flex';
+            var log = document.getElementById('boot-error-log');
+            if (log) {
+              log.textContent = window.__bootErrors.length
+                ? window.__bootErrors.join('\n')
+                : 'React quraşdırılmadı. URL: ' + window.location.href;
+            }
           }
         }
-      }
-      setTimeout(function () {
-        if (window.__bootErrors.length > 0) showBootFallbackIfUnmounted();
-      }, 1500);
-      setTimeout(showBootFallbackIfUnmounted, 4500);
+
+        if (hasRawEntry) {
+          setTimeout(tryRedirectToBuiltDocs, 800);
+        }
+        setTimeout(function () {
+          if (window.__bootErrors.length > 0) showBootFallbackIfUnmounted();
+        }, 1800);
+        setTimeout(showBootFallbackIfUnmounted, 4500);
+      })();
     </script>
   </body>
 </html>
