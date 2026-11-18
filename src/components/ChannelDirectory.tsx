@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Search, Tv, RefreshCw, ChevronDown, Eye, EyeOff } from 'lucide-react';
+import { Search, Tv, RefreshCw, ChevronDown, Eye, EyeOff, Play, Lock, Clock } from 'lucide-react';
 import { CategoryItem, ChannelItem } from '../types/iptv';
 
 interface ChannelDirectoryProps {
@@ -8,8 +8,10 @@ interface ChannelDirectoryProps {
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
-  onSelectChannelToWatch?: (channel: ChannelItem) => void;
-  canWatchLive?: boolean;
+  onSelectChannelToWatch: (channel: ChannelItem) => void;
+  subscriptionState: 'active' | 'pending' | 'none';
+  onGoToDashboard: () => void;
+  onBrowsePlans: () => void;
 }
 
 const PAGE_SIZE = 48;
@@ -21,13 +23,16 @@ export const ChannelDirectory: React.FC<ChannelDirectoryProps> = ({
   error,
   onRefresh,
   onSelectChannelToWatch,
-  canWatchLive = false,
+  subscriptionState,
+  onGoToDashboard,
+  onBrowsePlans,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [showAdult, setShowAdult] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [brokenLogos, setBrokenLogos] = useState<Record<number, boolean>>({});
+  const [watchNotice, setWatchNotice] = useState<{ channelName: string; state: 'pending' | 'none' } | null>(null);
 
   const visibleCategories = useMemo(() => {
     return categories.filter((cat) => {
@@ -163,6 +168,54 @@ export const ChannelDirectory: React.FC<ChannelDirectoryProps> = ({
           ))}
         </div>
 
+        {watchNotice && (
+          <div className="mb-6 p-4 bg-[#11151E] border border-amber-500/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              {watchNotice.state === 'pending' ? (
+                <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              ) : (
+                <Lock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              )}
+              <div className="text-xs space-y-1">
+                <p className="font-semibold text-white">
+                  {watchNotice.channelName}
+                </p>
+                <p className="text-slate-300">
+                  {watchNotice.state === 'pending'
+                    ? 'Abunəliyiniz hazırda Admin təsdiqi gözləyir. Təsdiqləndikdən dərhal sonra bütün kanalları birbaşa saytda izləyə biləcəksiniz.'
+                    : 'Kanalları saytda canlı izləmək üçün Həftəlik (5 AZN) və ya Aylıq (15 AZN) paketlərdən birini aktivləşdirin.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {watchNotice.state === 'pending' ? (
+                <button
+                  type="button"
+                  onClick={onGoToDashboard}
+                  className="px-4 py-2 text-xs font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors whitespace-nowrap"
+                >
+                  İstifadəçi Panelinə Keç
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onBrowsePlans}
+                  className="px-4 py-2 text-xs font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors whitespace-nowrap"
+                >
+                  Paketləri Seç
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setWatchNotice(null)}
+                className="px-3 py-2 text-xs text-slate-400 hover:text-white"
+              >
+                Bağla
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* States */}
         {loading && channels.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -237,15 +290,28 @@ export const ChannelDirectory: React.FC<ChannelDirectoryProps> = ({
                       </div>
                     </div>
 
-                    {canWatchLive && onSelectChannelToWatch && (
-                      <button
-                        type="button"
-                        onClick={() => onSelectChannelToWatch(ch)}
-                        className="px-2.5 py-1 text-xs font-medium bg-amber-500 text-slate-950 rounded hover:bg-amber-400 transition-colors shrink-0"
-                      >
-                        İzlə
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (subscriptionState === 'active') {
+                          setWatchNotice(null);
+                          onSelectChannelToWatch(ch);
+                        } else {
+                          setWatchNotice({
+                            channelName: ch.name,
+                            state: subscriptionState === 'pending' ? 'pending' : 'none',
+                          });
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded transition-colors shrink-0 ${
+                        subscriptionState === 'active'
+                          ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+                          : 'bg-[#090B10] text-slate-300 border border-white/15 hover:border-amber-400/50 hover:text-white'
+                      }`}
+                    >
+                      <Play className="w-3 h-3" />
+                      <span>İzlə</span>
+                    </button>
                   </div>
                 );
               })}

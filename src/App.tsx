@@ -250,6 +250,12 @@ function AppContent() {
     return userSubs.find((s) => s.status === 'active') || null;
   }, [userSubs]);
 
+  const subscriptionState: 'active' | 'pending' | 'none' = activeUserSub
+    ? 'active'
+    : userSubs.some((s) => s.status === 'pending')
+      ? 'pending'
+      : 'none';
+
   return (
     <div className="min-h-screen flex flex-col bg-[#090B10] text-slate-100">
       <Header
@@ -637,7 +643,9 @@ function AppContent() {
               loading={channelsLoading}
               error={channelsError}
               onRefresh={() => void fetchChannels(true)}
-              canWatchLive={Boolean(activeUserSub)}
+              subscriptionState={subscriptionState}
+              onGoToDashboard={() => handleNavigate('dashboard')}
+              onBrowsePlans={() => handleNavigate('home', 'paketler')}
               onSelectChannelToWatch={(channel) => {
                 if (activeUserSub) {
                   setPlayingChannel({ channel, sub: activeUserSub });
@@ -711,8 +719,15 @@ function AppContent() {
       {/* Active Subscriber Web Player */}
       <WebPlayerModal
         channel={playingChannel?.channel || null}
+        channels={channels}
+        categories={categories}
         username={playingChannel?.sub.xtreamUsername || ''}
         password={playingChannel?.sub.xtreamPassword || ''}
+        onSelectChannel={(nextChannel) => {
+          if (playingChannel) {
+            setPlayingChannel({ channel: nextChannel, sub: playingChannel.sub });
+          }
+        }}
         onClose={() => setPlayingChannel(null)}
       />
     </div>

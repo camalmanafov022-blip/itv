@@ -8,7 +8,26 @@ const __dirname = path.dirname(__filename);
 
 const M3U_SOURCE_URL = 'https://raw.githubusercontent.com/camalmanafov022-blip/Yeni/refs/heads/main/azer.m3u';
 const ADMIN_EMAIL = 'camalmanafov022@gmail.com';
-const PORT = Number(process.env.PORT || 3000);
+
+function resolvePort(): number {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--port' && args[i + 1]) {
+      const parsed = Number(args[i + 1]);
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    }
+    if (args[i].startsWith('--port=')) {
+      const parsed = Number(args[i].split('=')[1]);
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    }
+  }
+  if (process.env.NODE_ENV === 'production' && process.env.PORT) {
+    return Number(process.env.PORT);
+  }
+  return 3000;
+}
+
+const PORT = resolvePort();
 const DATA_DIR = path.join(__dirname, 'data');
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'xtream-accounts.json');
 
@@ -724,6 +743,40 @@ async function startServer() {
 
   app.get('/live/:username/:password/:streamParam', handleLiveStream);
   app.get('/:username/:password/:streamParam([0-9]+(?:\\.(?:m3u8|ts))?)', handleLiveStream);
+
+  // Authenticated stream resolver for active subscribers (returns direct HTTPS + fallback proxy URL)
+  app.get('/api/channel-stream', async (req, res) => {
+    const username = String(req.query.username || '').trim();
+    const password = String(req.query.password || '').trim();
+    const streamId = Number(req.query.streamId || 0);
+
+    const account = findAccountByCredentials(username, password);
+    if (!account || !isAccountCurrentlyActive(account)) {
+      res.status(403).json({ error: 'Yayımı izləmək üçün aktiv abunəlik tələb olunur.' });
+      return;
+    }
+
+    try {
+      const data = await getPlaylistData();
+      const channel = data.channels.find((c) => c.streamId === streamId);
+      if (!channel) {
+        res.status(404).json({ error: 'Kanal tapılmadı.' });
+        return;
+      }
+      const httpsUrl = channel.url.replace(/^http:\/\//i, 'https://');
+      const proxyUrl = `/api/hls-proxy?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&streamId=${channel.streamId}`;
+      res.json({
+        streamId: channel.streamId,
+        name: channel.name,
+        group: channel.group,
+        url: channel.url,
+        httpsUrl,
+        proxyUrl,
+      });
+    } catch {
+      res.status(502).json({ error: 'Kanal məlumatı alına bilmədi.' });
+    }
+  });
 
   // HTTPS-safe HLS proxy for in-browser active subscriber player
   app.get('/api/hls-proxy', async (req, res) => {

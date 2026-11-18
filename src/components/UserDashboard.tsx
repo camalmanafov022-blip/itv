@@ -288,13 +288,25 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
               </p>
             </div>
           </div>
-          <div className="text-left md:text-right shrink-0 tabular-nums">
-            <p className="text-sm font-semibold text-emerald-300">
-              {remainingDays} gün qalıb
-            </p>
-            <p className="text-xs text-slate-400">
-              Bitmə tarixi: {formatAzDate(activeSub.expiresAt)}
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
+            <div className="text-left md:text-right tabular-nums">
+              <p className="text-sm font-semibold text-emerald-300">
+                {remainingDays} gün qalıb
+              </p>
+              <p className="text-xs text-slate-400">
+                Bitmə tarixi: {formatAzDate(activeSub.expiresAt)}
+              </p>
+            </div>
+            {previewChannels.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onWatchChannel(previewChannels[0], activeSub)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-500 text-slate-950 rounded-lg hover:bg-emerald-400 transition-colors whitespace-nowrap shrink-0"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Saytda Canlı İzlə</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -552,22 +564,34 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
             </div>
 
             {activeSub.status === 'active' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {previewChannels.map((ch) => (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {previewChannels.map((ch) => (
+                    <button
+                      key={ch.streamId}
+                      type="button"
+                      onClick={() => onWatchChannel(ch, activeSub)}
+                      className="flex items-center justify-between gap-2 p-2.5 bg-[#090B10] border border-white/10 rounded-lg hover:border-amber-400/60 text-left transition-colors"
+                    >
+                      <span className="text-xs font-medium text-white truncate">{ch.name}</span>
+                      <Play className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+                {previewChannels.length > 0 && (
                   <button
-                    key={ch.streamId}
                     type="button"
-                    onClick={() => onWatchChannel(ch, activeSub)}
-                    className="flex items-center justify-between gap-2 p-2.5 bg-[#090B10] border border-white/10 rounded-lg hover:border-amber-400/60 text-left transition-colors"
+                    onClick={() => onWatchChannel(previewChannels[0], activeSub)}
+                    className="w-full py-2.5 px-4 inline-flex items-center justify-center gap-2 text-xs font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors"
                   >
-                    <span className="text-xs font-medium text-white truncate">{ch.name}</span>
-                    <Play className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <Play className="w-3.5 h-3.5" />
+                    <span>Bütün {channels.length.toLocaleString('az-AZ')} Kanalı Pleyerdə Aç</span>
                   </button>
-                ))}
+                )}
               </div>
             ) : (
               <p className="text-xs text-slate-400 leading-relaxed">
-                Admin təsdiqindən sonra Azərbaycan və beynəlxalq kanalları birbaşa bu bölmədən brauzer daxilində test edə və izləyə bilərsiniz.
+                Admin təsdiqindən sonra Azərbaycan və beynəlxalq kanalları birbaşa bu bölmədən brauzer daxilində izləyə bilərsiniz.
               </p>
             )}
           </div>
