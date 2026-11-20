@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, sendEmailVerification, signOut, User } from 'firebase/auth';
 import {
   collection,
   doc,
@@ -53,10 +53,23 @@ function sortByCreatedDesc<T extends { createdAt?: unknown }>(items: T[]): T[] {
   });
 }
 
+function resolveViewFromLocation(): ActiveView {
+  if (typeof window === 'undefined') return 'home';
+  const hash = window.location.hash.toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+  if (hash === '#admin' || path === '/admin' || path.endsWith('/admin')) {
+    return 'admin';
+  }
+  if (hash === '#panel' || hash === '#dashboard') {
+    return 'dashboard';
+  }
+  return 'home';
+}
+
 function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [activeView, setActiveView] = useState<ActiveView>('home');
+  const [activeView, setActiveView] = useState<ActiveView>(() => resolveViewFromLocation());
 
   // Channels from azer.m3u
   const [channels, setChannels] = useState<ChannelItem[]>([]);
@@ -114,6 +127,14 @@ function AppContent() {
   useEffect(() => {
     void fetchChannels();
   }, [fetchChannels]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setActiveView(resolveViewFromLocation());
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
@@ -246,15 +267,30 @@ function AppContent() {
   const handleSignOut = async () => {
     await signOut(auth);
     setActiveView('home');
+    if (window.location.hash === '#admin' || window.location.hash === '#panel') {
+      window.history.replaceState(null, '', '#');
+    }
   };
 
   const handleNavigate = (view: ActiveView, anchorId?: string) => {
     setActiveView(view);
+    if (view === 'admin') {
+      window.history.replaceState(null, '', '#admin');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (view === 'dashboard') {
+      window.history.replaceState(null, '', '#panel');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     if (view === 'home' && anchorId) {
+      window.history.replaceState(null, '', `#${anchorId}`);
       setTimeout(() => {
         document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth' });
       }, 60);
     } else {
+      window.history.replaceState(null, '', '#');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -346,6 +382,71 @@ function AppContent() {
             payments={adminPayments}
             loading={adminLoading}
           />
+        )}
+
+        {activeView === 'admin' && !isAdmin && (
+          <section className="py-20 px-6 max-w-[1200px] mx-auto">
+            <div className="max-w-lg mx-auto bg-[#11151E] border border-white/10 rounded-xl p-8 text-center space-y-5">
+              <ShieldCheck className="w-9 h-9 text-amber-400 mx-auto" />
+              <h1 className="font-display text-2xl font-semibold text-white">
+                Admin Panelinə Giriş
+              </h1>
+
+              {!user ? (
+                <>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Admin konsoluna daxil olmaq üçün administrator hesabınızla (
+                    <span className="text-white font-mono text-xs">{ADMIN_EMAIL}</span>) giriş edin.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAuth('login')}
+                    className="px-6 py-2.5 text-sm font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors"
+                  >
+                    Admin Kimi Daxil Ol
+                  </button>
+                </>
+              ) : user.email === ADMIN_EMAIL && !user.emailVerified ? (
+                <>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    <span className="text-white font-mono text-xs">{user.email}</span> hesabı ilə daxil olmusunuz. Admin icazəsini aktivləşdirmək üçün e-poçtunuzu bir dəfə təsdiqləyin.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void sendEmailVerification(user).catch(() => {});
+                      }}
+                      className="px-5 py-2.5 text-xs font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors"
+                    >
+                      Təsdiq Linki Göndər
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleReloadUser()}
+                      className="px-5 py-2.5 text-xs font-medium bg-[#090B10] border border-white/15 text-white rounded-lg hover:border-amber-400 transition-colors"
+                    >
+                      Təsdiqlədim, Yenilə
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Hazırda <span className="text-white">{user.email}</span> hesabı aktivdir. Admin paneli yalnız{' '}
+                    <span className="text-amber-300 font-mono text-xs">{ADMIN_EMAIL}</span> hesabı üçündür.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate('home')}
+                    className="px-6 py-2.5 text-sm font-semibold bg-[#090B10] border border-white/15 text-white rounded-lg hover:border-amber-400 transition-colors"
+                  >
+                    Ana Səhifəyə Qayıt
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
         )}
 
         {activeView === 'home' && (
