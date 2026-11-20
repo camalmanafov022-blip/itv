@@ -1,12 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
 
 export const OperationType = {
   CREATE: 'create',
@@ -60,6 +59,39 @@ export function handleFirestoreError(
   };
   console.error('Firestore Error:', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+export function formatFirebaseAuthError(error: unknown): string {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (code === 'auth/email-already-in-use' || message.includes('email-already-in-use')) {
+    return 'Bu e-poçt ünvanı artıq qeydiyyatdan keçib. Zəhmət olmasa "Daxil Ol" bölməsindən giriş edin.';
+  }
+  if (
+    code === 'auth/invalid-credential' ||
+    code === 'auth/wrong-password' ||
+    code === 'auth/user-not-found' ||
+    message.includes('invalid-credential')
+  ) {
+    return 'E-poçt ünvanı və ya şifrə yanlışdır.';
+  }
+  if (code === 'auth/weak-password' || message.includes('weak-password')) {
+    return 'Şifrə minimum 6 simvoldan ibarət olmalıdır.';
+  }
+  if (code === 'auth/invalid-email' || message.includes('invalid-email')) {
+    return 'Düzgün e-poçt ünvanı daxil edin.';
+  }
+  if (code === 'auth/too-many-requests' || message.includes('too-many-requests')) {
+    return 'Çox sayda cəhd edildi. Zəhmət olmasa bir neçə dəqiqə sonra yenidən yoxlayın.';
+  }
+  if (code === 'auth/operation-not-allowed' || message.includes('operation-not-allowed')) {
+    return 'Firebase Console-da "Email/Password" giriş üsulu hələ aktiv edilməyib (Authentication → Sign-in method → Email/Password → Enable).';
+  }
+  return message || 'Giriş və ya qeydiyyat zamanı xəta baş verdi.';
 }
 
 async function testConnection(): Promise<void> {

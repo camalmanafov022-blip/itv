@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import {
   collection,
   doc,
@@ -8,7 +8,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { Check, ArrowRight, Tv, ShieldCheck, Zap, CreditCard } from 'lucide-react';
-import { auth, db, googleProvider, handleFirestoreError, OperationType } from './lib/firebase';
+import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { syncBatchToServer, syncSubscriptionToServer } from './lib/xtreamUtils';
 import { fetchChannelsWithFallback } from './lib/m3uClient';
 import heroCinemaImg from './assets/images/hero_iptv_cinema_1794949153123.jpg';
@@ -32,6 +32,7 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { UserDashboard } from './components/UserDashboard';
 import { AdminPanel } from './components/AdminPanel';
 import { WebPlayerModal } from './components/WebPlayerModal';
+import { AuthModal, AuthModalMode } from './components/AuthModal';
 
 function sortByCreatedDesc<T extends { createdAt?: unknown }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
@@ -67,8 +68,14 @@ function AppContent() {
   const [cycleFilter, setCycleFilter] = useState<'all' | BillingCycle>('all');
   const [checkoutPlan, setCheckoutPlan] = useState<PlanDefinition | null>(null);
 
+  // Auth modal state
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<AuthModalMode>('login');
+  const [, setAuthRefreshTick] = useState(0);
+
   // User data from Firestore
   const [hasUserProfileDoc, setHasUserProfileDoc] = useState(false);
+  const [profileFullName, setProfileFullName] = useState<string | undefined>(undefined);
   const [userPhone, setUserPhone] = useState<string | undefined>(undefined);
   const [userSubs, setUserSubs] = useState<SubscriptionRecord[]>([]);
   const [userPayments, setUserPayments] = useState<PaymentRecord[]>([]);
@@ -120,6 +127,7 @@ function AppContent() {
   useEffect(() => {
     if (!authReady || !user) {
       setHasUserProfileDoc(false);
+      setProfileFullName(undefined);
       setUserPhone(undefined);
       setUserSubs([]);
       setUserPayments([]);
@@ -134,7 +142,8 @@ function AppContent() {
       (snap) => {
         if (snap.exists()) {
           setHasUserProfileDoc(true);
-          const data = snap.data() as { phone?: string };
+          const data = snap.data() as { fullName?: string; phone?: string };
+          setProfileFullName(data.fullName);
           setUserPhone(data.phone);
         } else {
           setHasUserProfileDoc(false);
@@ -220,9 +229,18 @@ function AppContent() {
     };
   }, [authReady, isAdmin]);
 
-  const handleSignIn = async (): Promise<User | null> => {
-    const res = await signInWithPopup(auth, googleProvider);
-    return res.user;
+  const handleOpenAuth = (mode: AuthModalMode = 'login') => {
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  };
+
+  const handleReloadUser = async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      await auth.currentUser.getIdToken(true);
+      setUser(auth.currentUser);
+      setAuthRefreshTick((t) => t + 1);
+    }
   };
 
   const handleSignOut = async () => {
@@ -262,8 +280,9 @@ function AppContent() {
         activeView={activeView}
         onNavigate={handleNavigate}
         user={user}
+        profileFullName={profileFullName}
         isAdmin={isAdmin}
-        onSignIn={() => void handleSignIn()}
+        onOpenAuth={() => handleOpenAuth('login')}
         onSignOut={() => void handleSignOut()}
       />
 
@@ -314,7 +333,8 @@ function AppContent() {
             notifications={userNotifications}
             channels={channels}
             loading={userLoading}
-            onSignIn={() => void handleSignIn()}
+            onOpenAuth={(mode = 'login') => handleOpenAuth(mode)}
+            onReloadUser={handleReloadUser}
             onBrowsePlans={() => handleNavigate('home', 'paketler')}
             onWatchChannel={(channel, sub) => setPlayingChannel({ channel, sub })}
           />
@@ -705,15 +725,22 @@ function AppContent() {
       <CheckoutModal
         plan={checkoutPlan}
         user={user}
+        existingProfileName={profileFullName}
         existingProfilePhone={userPhone}
         hasUserProfileDoc={hasUserProfileDoc}
         onClose={() => setCheckoutPlan(null)}
-        onGoogleSignIn={handleSignIn}
         onSuccess={() => {
           setCheckoutPlan(null);
           setActiveView('dashboard');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
+      />
+
+      {/* Standard Email/Password Auth Modal */}
+      <AuthModal
+        open={authModalOpen}
+        initialMode={authModalMode}
+        onClose={() => setAuthModalOpen(false)}
       />
 
       {/* Active Subscriber Web Player */}

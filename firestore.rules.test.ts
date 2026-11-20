@@ -18,7 +18,7 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
     collection: 'subscriptions',
     operation: 'create',
     expected: 'PERMISSION_DENIED',
-    reason: 'isVerified() rejects null request.auth',
+    reason: 'isSignedIn() rejects null request.auth',
   },
   {
     id: 2,
@@ -70,11 +70,11 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
   },
   {
     id: 8,
-    name: 'Unverified email token write',
-    collection: 'users',
-    operation: 'create',
+    name: 'Unverified admin email spoof activating subscription',
+    collection: 'subscriptions',
+    operation: 'update',
     expected: 'PERMISSION_DENIED',
-    reason: 'request.auth.token.email_verified == true blocks unverified accounts',
+    reason: 'isAdmin() strictly requires request.auth.token.email_verified == true',
   },
   {
     id: 9,

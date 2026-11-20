@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
-import { User } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  updateProfile,
+  User,
+} from 'firebase/auth';
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { X, CreditCard, Smartphone, Coins, CheckCircle2, ShieldCheck, Lock } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { X, CreditCard, Smartphone, Coins, CheckCircle2, Lock, UserPlus, LogIn } from 'lucide-react';
+import { auth, db, formatFirebaseAuthError, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
   buildM3uUrl,
   generateSafeId,
@@ -17,23 +23,28 @@ import { PaymentMethodType, PlanDefinition } from '../types/iptv';
 interface CheckoutModalProps {
   plan: PlanDefinition | null;
   user: User | null;
+  existingProfileName?: string;
   existingProfilePhone?: string;
   hasUserProfileDoc: boolean;
   onClose: () => void;
-  onGoogleSignIn: () => Promise<User | null>;
   onSuccess: (subId: string) => void;
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   plan,
   user,
+  existingProfileName,
   existingProfilePhone,
   hasUserProfileDoc,
   onClose,
-  onGoogleSignIn,
   onSuccess,
 }) => {
-  const [fullName, setFullName] = useState(user?.displayName || '');
+  const [authTab, setAuthTab] = useState<'register' | 'login'>('register');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+
+  const [fullName, setFullName] = useState(existingProfileName || user?.displayName || '');
   const [phone, setPhone] = useState(existingProfilePhone || '+994 ');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('card');
 
@@ -46,6 +57,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (plan) {
+      setErrorMsg(null);
+      if (existingProfileName || user?.displayName) {
+        setFullName(existingProfileName || user?.displayName || '');
+      }
+      if (existingProfilePhone) {
+        setPhone(existingProfilePhone);
+      }
+    }
+  }, [plan, user, existingProfileName, existingProfilePhone]);
 
   if (!plan) return null;
 
@@ -62,17 +85,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     return digits;
   };
 
-  const handleSignInClick = async () => {
+  const handleInlineLogin = async () => {
     setErrorMsg(null);
+    const cleanEmail = authEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('Düzgün e-poçt ünvanı daxil edin.');
+      return;
+    }
+    if (authPassword.length < 6) {
+      setErrorMsg('Şifrə minimum 6 simvol olmalıdır.');
+      return;
+    }
+
+    setLoginBusy(true);
     try {
-      const signedInUser = await onGoogleSignIn();
-      if (signedInUser && !fullName) {
-        setFullName(signedInUser.displayName || '');
+      const cred = await signInWithEmailAndPassword(auth, cleanEmail, authPassword);
+      if (cred.user.displayName && !fullName.trim()) {
+        setFullName(cred.user.displayName);
       }
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : 'Google hesabı ilə daxil olmaq mümkün olmadı.'
-      );
+      setErrorMsg(formatFirebaseAuthError(err));
+    } finally {
+      setLoginBusy(false);
     }
   };
 
@@ -80,8 +114,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!user) {
-      setErrorMsg('Zəhmət olmasa əvvəlcə Google hesabı ilə qeydiyyatdan keçin.');
+    if (!user && authTab === 'login') {
+      setErrorMsg('Əvvəlcə yuxarıdakı bölmədən hesabınıza daxil olun və ya "Yeni Hesab Yarat" seçin.');
       return;
     }
 
@@ -94,6 +128,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     if (cleanPhone.length < 7) {
       setErrorMsg('WhatsApp / əlaqə nömrəsini düzgün daxil edin.');
       return;
+    }
+
+    const cleanEmail = authEmail.trim().toLowerCase();
+    if (!user) {
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        setErrorMsg('Qeydiyyat üçün düzgün e-poçt ünvanı daxil edin.');
+        return;
+      }
+      if (authPassword.length < 6) {
+        setErrorMsg('Hesab şifrəsi minimum 6 simvol olmalıdır.');
+        return;
+      }
     }
 
     let methodLabel = '';
@@ -135,6 +181,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     setSubmitting(true);
     try {
+      let activeUser = user;
+      let isNewAccount = false;
+
+      if (!activeUser) {
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, authPassword);
+        await updateProfile(cred.user, { displayName: cleanName.slice(0, 120) });
+        void sendEmailVerification(cred.user).catch(() => {
+          // Non-blocking verification email
+        });
+        activeUser = cred.user;
+        isNewAccount = true;
+      }
+
       const subId = generateSafeId('sub');
       const payId = generateSafeId('pay');
       const notifId = generateSafeId('notif');
@@ -147,8 +206,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       const batch = writeBatch(db);
 
       // 1. Create or update user profile
-      const userRef = doc(db, 'users', user.uid);
-      if (hasUserProfileDoc) {
+      const userRef = doc(db, 'users', activeUser.uid);
+      if (hasUserProfileDoc && !isNewAccount) {
         batch.update(userRef, {
           fullName: cleanName.slice(0, 120),
           phone: cleanPhone.slice(0, 32),
@@ -156,9 +215,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         });
       } else {
         batch.set(userRef, {
-          uid: user.uid,
+          uid: activeUser.uid,
           fullName: cleanName.slice(0, 120),
-          email: (user.email || '').slice(0, 160),
+          email: (activeUser.email || cleanEmail).slice(0, 160),
           phone: cleanPhone.slice(0, 32),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -168,7 +227,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       // 2. Automated payment record
       batch.set(doc(db, 'payments', payId), {
         id: payId,
-        userId: user.uid,
+        userId: activeUser.uid,
         subscriptionId: subId,
         planId: plan.id,
         planName: plan.name,
@@ -184,8 +243,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       // 3. Subscription with automatically generated Xtream Codes (pending admin approval)
       batch.set(doc(db, 'subscriptions', subId), {
         id: subId,
-        userId: user.uid,
-        userEmail: (user.email || '').slice(0, 160),
+        userId: activeUser.uid,
+        userEmail: (activeUser.email || cleanEmail).slice(0, 160),
         userName: cleanName.slice(0, 120),
         userPhone: cleanPhone.slice(0, 32),
         planId: plan.id,
@@ -209,11 +268,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       // 4. Automated Xtream Codes dispatch notification
       batch.set(doc(db, 'notifications', notifId), {
         id: notifId,
-        userId: user.uid,
+        userId: activeUser.uid,
         subscriptionId: subId,
         channel: 'auto_dispatch',
         title: `Xtream Codes məlumatları yaradıldı (${xtreamUsername})`,
-        message: `${plan.name} paketi üçün ödəniş (${plan.priceAzn} AZN · ${transactionRef}) təsdiqləndi. Avtomatik Xtream giriş məlumatlarınız ${user.email} və ${cleanPhone} ünvanına göndərildi. Admin təsdiqindən dərhal sonra kanallar aktivləşəcək.`,
+        message: `${plan.name} paketi üçün ödəniş (${plan.priceAzn} AZN · ${transactionRef}) təsdiqləndi. Avtomatik Xtream giriş məlumatlarınız ${activeUser.email || cleanEmail} və ${cleanPhone} ünvanına göndərildi. Admin təsdiqindən dərhal sonra kanallar aktivləşəcək.`,
         xtreamUsername,
         createdAt: serverTimestamp(),
       });
@@ -226,8 +285,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       await syncSubscriptionToServer({
         id: subId,
-        userId: user.uid,
-        userEmail: user.email || '',
+        userId: activeUser.uid,
+        userEmail: activeUser.email || cleanEmail,
         userName: cleanName,
         planId: plan.id,
         planName: plan.name,
@@ -240,9 +299,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       onSuccess(subId);
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : 'Qeydiyyat zamanı xəta baş verdi.'
-      );
+      setErrorMsg(formatFirebaseAuthError(err));
     } finally {
       setSubmitting(false);
     }
@@ -276,63 +333,124 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         </div>
 
         <form onSubmit={validateAndSubmit} className="p-6 space-y-5">
-          {/* Auth step */}
+          {/* Standard Registration or Login Step */}
           {!user ? (
-            <div className="p-5 bg-[#090B10] border border-white/10 rounded-lg space-y-3">
-              <div className="flex items-center gap-2 text-white text-sm font-medium">
-                <ShieldCheck className="w-4 h-4 text-amber-400" />
-                <span>1. Hesabınızı yaradın və ya daxil olun</span>
+            <div className="p-4 bg-[#090B10] border border-white/10 rounded-lg space-y-4">
+              <div className="grid grid-cols-2 gap-1 p-1 bg-[#11151E] border border-white/10 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthTab('register');
+                    setErrorMsg(null);
+                  }}
+                  className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-md transition-colors ${
+                    authTab === 'register'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Yeni Hesab Yarat</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthTab('login');
+                    setErrorMsg(null);
+                  }}
+                  className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-md transition-colors ${
+                    authTab === 'login'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Mövcud Hesaba Daxil Ol</span>
+                </button>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Avtomatik Xtream Codes giriş məlumatlarının hesabınıza bağlanması və təhlükəsiz saxlanması üçün Google ilə daxil olun.
-              </p>
-              <button
-                type="button"
-                onClick={handleSignInClick}
-                className="w-full py-2.5 px-4 bg-white text-slate-950 font-semibold text-sm rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                Google ilə Daxil Ol və Davam Et
-              </button>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">E-poçt ünvanı</label>
+                  <input
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="numune@mail.com"
+                    className="w-full px-3.5 py-2 text-sm bg-[#11151E] border border-white/10 rounded-lg text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">
+                    {authTab === 'register' ? 'Hesab Şifrəsi (min. 6 simvol)' : 'Şifrə'}
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    autoComplete={authTab === 'login' ? 'current-password' : 'new-password'}
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="••••••"
+                    className="w-full px-3.5 py-2 text-sm bg-[#11151E] border border-white/10 rounded-lg text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              {authTab === 'login' && (
+                <button
+                  type="button"
+                  disabled={loginBusy}
+                  onClick={handleInlineLogin}
+                  className="w-full py-2 px-4 bg-white text-slate-950 font-semibold text-xs rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                >
+                  {loginBusy ? 'Yoxlanılır...' : 'Hesaba Daxil Ol və Davam Et'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex items-center justify-between px-4 py-3 bg-[#090B10] border border-emerald-500/30 rounded-lg text-xs">
               <div className="flex items-center gap-2 text-emerald-300">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>Hesab təsdiqləndi: {user.email}</span>
+                <span>Hesab aktivdir: {user.email}</span>
               </div>
               <span className="text-slate-400 tabular-nums">{plan.maxConnections} cihaz</span>
             </div>
           )}
 
           {/* Customer fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Ad və Soyad
-              </label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Məs: Kamran Əliyev"
-                className="w-full px-3.5 py-2.5 text-sm bg-[#090B10] border border-white/10 rounded-lg text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
-              />
+          {(user || authTab === 'register') && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Ad və Soyad
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Məs: Kamran Əliyev"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#090B10] border border-white/10 rounded-lg text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  WhatsApp / Telefon (Məlumat göndərişi)
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+994 50 000 00 00"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#090B10] border border-white/10 rounded-lg text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400 font-mono tabular-nums"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                WhatsApp / Telefon (Məlumat göndərişi)
-              </label>
-              <input
-                type="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+994 50 000 00 00"
-                className="w-full px-3.5 py-2.5 text-sm bg-[#090B10] border border-white/10 rounded-lg text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-400 font-mono tabular-nums"
-              />
-            </div>
-          </div>
+          )}
 
           {/* Automated Payment Method Tabs */}
           <div>
@@ -466,7 +584,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           )}
 
           {errorMsg && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300 leading-relaxed">
               {errorMsg}
             </div>
           )}
@@ -478,7 +596,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
             <button
               type="submit"
-              disabled={submitting || !user}
+              disabled={submitting || (!user && authTab === 'login')}
               className="px-5 py-2.5 text-sm font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               {submitting

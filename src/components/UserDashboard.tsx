@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { User } from 'firebase/auth';
+import { sendEmailVerification, User } from 'firebase/auth';
 import {
   Activity,
   Check,
@@ -17,6 +17,7 @@ import {
   Tv,
 } from 'lucide-react';
 import {
+  ADMIN_EMAIL,
   ChannelItem,
   DispatchNotification,
   PaymentRecord,
@@ -38,7 +39,8 @@ interface UserDashboardProps {
   notifications: DispatchNotification[];
   channels: ChannelItem[];
   loading: boolean;
-  onSignIn: () => void;
+  onOpenAuth: (mode?: 'login' | 'register') => void;
+  onReloadUser: () => Promise<void>;
   onBrowsePlans: () => void;
   onWatchChannel: (channel: ChannelItem, sub: SubscriptionRecord) => void;
 }
@@ -50,7 +52,8 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
   notifications,
   channels,
   loading,
-  onSignIn,
+  onOpenAuth,
+  onReloadUser,
   onBrowsePlans,
   onWatchChannel,
 }) => {
@@ -63,6 +66,8 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
     ok: boolean;
     message: string;
   } | null>(null);
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
+  const [verifyBusy, setVerifyBusy] = useState(false);
 
   const activeSub = useMemo(() => {
     if (subscriptions.length === 0) return null;
@@ -158,19 +163,81 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
             İstifadəçi Panelinə Daxil Olun
           </h2>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Avtomatik yaradılan Xtream Codes giriş məlumatlarınızı, ödəniş qəbzlərinizi və abunəlik statusunuzu görmək üçün hesabınıza daxil olun.
+            Avtomatik yaradılan Xtream Codes giriş məlumatlarınızı, ödəniş qəbzlərinizi və abunəlik statusunuzu görmək üçün e-poçt və şifrənizlə daxil olun və ya qeydiyyatdan keçin.
           </p>
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="px-6 py-2.5 text-sm font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors"
-          >
-            Google ilə Daxil Ol
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => onOpenAuth('login')}
+              className="px-6 py-2.5 text-sm font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors"
+            >
+              Daxil Ol
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenAuth('register')}
+              className="px-6 py-2.5 text-sm font-semibold bg-[#090B10] border border-white/15 text-white rounded-lg hover:border-amber-400/60 transition-colors"
+            >
+              Qeydiyyatdan Keç
+            </button>
+          </div>
         </div>
       </section>
     );
   }
+
+  const handleSendAdminVerification = async () => {
+    setVerifyBusy(true);
+    setVerifyMsg(null);
+    try {
+      await sendEmailVerification(user);
+      setVerifyMsg('Təsdiq linki e-poçtunuza göndərildi. Linkə kliklədikdən sonra "Təsdiqlədim, Yenilə" düyməsini basın.');
+    } catch (err) {
+      setVerifyMsg(err instanceof Error ? err.message : 'E-poçt göndərilmədi.');
+    } finally {
+      setVerifyBusy(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    setVerifyBusy(true);
+    try {
+      await onReloadUser();
+    } finally {
+      setVerifyBusy(false);
+    }
+  };
+
+  const adminNeedsVerifyBanner =
+    user.email === ADMIN_EMAIL && !user.emailVerified ? (
+      <div className="max-w-xl mx-auto mb-6 p-5 bg-amber-500/10 border border-amber-400/40 rounded-xl text-left space-y-3">
+        <p className="text-xs font-semibold text-amber-300">
+          Admin Paneli üçün E-poçt Təsdiqi Tələb Olunur
+        </p>
+        <p className="text-xs text-slate-300 leading-relaxed">
+          Admin hesabınızın ({user.email}) təhlükəsizliyi üçün e-poçt ünvanınızı bir dəfə təsdiqləməlisiniz.
+        </p>
+        {verifyMsg && <p className="text-xs text-emerald-300">{verifyMsg}</p>}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={verifyBusy}
+            onClick={handleSendAdminVerification}
+            className="px-4 py-2 text-xs font-semibold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50"
+          >
+            Təsdiq Linki Göndər
+          </button>
+          <button
+            type="button"
+            disabled={verifyBusy}
+            onClick={handleCheckVerification}
+            className="px-4 py-2 text-xs font-medium bg-[#090B10] border border-white/15 text-white rounded-lg hover:border-amber-400 transition-colors disabled:opacity-50"
+          >
+            Təsdiqlədim, Yenilə
+          </button>
+        </div>
+      </div>
+    ) : null;
 
   if (loading) {
     return (
@@ -184,6 +251,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
   if (!activeSub) {
     return (
       <section className="py-20 px-6 max-w-[1200px] mx-auto">
+        {adminNeedsVerifyBanner}
         <div className="max-w-xl mx-auto bg-[#11151E] border border-white/10 rounded-xl p-10 text-center space-y-5">
           <Plus className="w-8 h-8 text-amber-400 mx-auto" />
           <h2 className="font-display text-2xl font-semibold text-white">
@@ -215,6 +283,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
 
   return (
     <section className="py-10 px-6 max-w-[1200px] mx-auto space-y-8">
+      {adminNeedsVerifyBanner}
       {/* Top dashboard header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/10">
         <div>

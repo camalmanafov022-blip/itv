@@ -135,13 +135,11 @@ service cloud.firestore {
       allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if isAdmin();
       allow create: if isValidId(userId)
-        && isVerified()
         && isOwner(userId)
         && isValidUserProfile(incoming(), userId)
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
       allow update: if isValidId(userId)
-        && isVerified()
         && isValidUserProfile(incoming(), userId)
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
@@ -159,7 +157,7 @@ service cloud.firestore {
       );
       allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(subscriptionId)
-        && isVerified()
+        && isSignedIn()
         && isValidSubscription(incoming(), subscriptionId)
         && incoming().userId == request.auth.uid
         && incoming().status == 'pending'
@@ -168,7 +166,7 @@ service cloud.firestore {
         && incoming().updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/payments/$(incoming().paymentId));
       allow update: if isValidId(subscriptionId)
-        && isVerified()
+        && isAdmin()
         && isValidSubscription(incoming(), subscriptionId)
         && incoming().id == existing().id
         && incoming().userId == existing().userId
@@ -176,7 +174,6 @@ service cloud.firestore {
         && incoming().paymentId == existing().paymentId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && isAdmin()
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'status', 'paymentStatus', 'adminNote', 'activatedAt', 'expiresAt', 'updatedAt'
         ]);
@@ -189,14 +186,13 @@ service cloud.firestore {
       );
       allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(paymentId)
-        && isVerified()
+        && isSignedIn()
         && isValidPayment(incoming(), paymentId)
         && incoming().userId == request.auth.uid
         && incoming().status == 'paid'
         && incoming().createdAt == request.time
         && existsAfter(/databases/$(database)/documents/subscriptions/$(incoming().subscriptionId));
       allow update: if isValidId(paymentId)
-        && isVerified()
         && isAdmin()
         && isValidPayment(incoming(), paymentId)
         && incoming().id == existing().id
@@ -213,7 +209,7 @@ service cloud.firestore {
       );
       allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isValidId(notificationId)
-        && isVerified()
+        && isSignedIn()
         && isValidNotification(incoming(), notificationId)
         && incoming().createdAt == request.time
         && (

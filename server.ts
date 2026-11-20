@@ -461,8 +461,8 @@ async function startServer() {
     }
 
     const verifiedUser = await verifyFirebaseIdToken(token);
-    if (!verifiedUser || !verifiedUser.emailVerified) {
-      res.status(403).json({ error: 'Təsdiqlənməmiş istifadəçi.' });
+    if (!verifiedUser) {
+      res.status(403).json({ error: 'İstifadəçi sessiyası etibarsızdır.' });
       return;
     }
 
@@ -482,7 +482,7 @@ async function startServer() {
       return;
     }
 
-    const isAdminUser = verifiedUser.email === ADMIN_EMAIL;
+    const isAdminUser = Boolean(verifiedUser.emailVerified && verifiedUser.email === ADMIN_EMAIL);
     const existing = store[payload.subscriptionId];
 
     if (!payload.xtreamUsername || !payload.xtreamPassword) {
