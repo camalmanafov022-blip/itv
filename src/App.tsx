@@ -10,7 +10,7 @@ import {
 import { Check, ArrowRight, Tv, ShieldCheck, Zap, CreditCard } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { syncBatchToServer, syncSubscriptionToServer } from './lib/xtreamUtils';
-import { fetchChannelsWithFallback } from './lib/m3uClient';
+import { fetchChannelsWithFallback, isFreeAzerbaijanGroup } from './lib/m3uClient';
 import heroCinemaImg from './assets/images/hero_iptv_cinema_1794949153123.jpg';
 import sportsStadiumImg from './assets/images/sports_live_stadium_1794949152098.jpg';
 import cinemaLoungeImg from './assets/images/cinema_4k_lounge_1794949152320.jpg';
@@ -103,7 +103,7 @@ function AppContent() {
   // Live web player modal
   const [playingChannel, setPlayingChannel] = useState<{
     channel: ChannelItem;
-    sub: SubscriptionRecord;
+    sub: SubscriptionRecord | null;
   } | null>(null);
 
   const isAdmin = Boolean(user && user.email === ADMIN_EMAIL && user.emailVerified);
@@ -770,6 +770,8 @@ function AppContent() {
               onSelectChannelToWatch={(channel) => {
                 if (activeUserSub) {
                   setPlayingChannel({ channel, sub: activeUserSub });
+                } else if (isFreeAzerbaijanGroup(channel.group)) {
+                  setPlayingChannel({ channel, sub: null });
                 }
               }}
             />
@@ -844,18 +846,20 @@ function AppContent() {
         onClose={() => setAuthModalOpen(false)}
       />
 
-      {/* Active Subscriber Web Player */}
+      {/* Live Web Player (Active Subscribers + Free AZƏRBAYCAN Channels) */}
       <WebPlayerModal
         channel={playingChannel?.channel || null}
         channels={channels}
         categories={categories}
-        username={playingChannel?.sub.xtreamUsername || ''}
-        password={playingChannel?.sub.xtreamPassword || ''}
+        username={playingChannel?.sub?.xtreamUsername || ''}
+        password={playingChannel?.sub?.xtreamPassword || ''}
+        isActiveSubscriber={Boolean(playingChannel?.sub)}
         onSelectChannel={(nextChannel) => {
           if (playingChannel) {
             setPlayingChannel({ channel: nextChannel, sub: playingChannel.sub });
           }
         }}
+        onBrowsePlans={() => handleNavigate('home', 'paketler')}
         onClose={() => setPlayingChannel(null)}
       />
     </div>

@@ -1,16 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import {
-  AlertCircle,
-  Check,
-  Copy,
-  RefreshCw,
-  Search,
-  Tv,
-  X,
-} from 'lucide-react';
+import { Lock, AlertCircle, Check, Copy, RefreshCw, Search, Tv, X } from 'lucide-react';
 import { CategoryItem, ChannelItem } from '../types/iptv';
-import { ParsedChannelWithUrl } from '../lib/m3uClient';
+import { isFreeAzerbaijanGroup, ParsedChannelWithUrl } from '../lib/m3uClient';
 
 interface WebPlayerModalProps {
   channel: ChannelItem | null;
@@ -18,7 +10,9 @@ interface WebPlayerModalProps {
   categories: CategoryItem[];
   username: string;
   password: string;
+  isActiveSubscriber: boolean;
   onSelectChannel: (channel: ChannelItem) => void;
+  onBrowsePlans: () => void;
   onClose: () => void;
 }
 
@@ -28,7 +22,9 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
   categories,
   username,
   password,
+  isActiveSubscriber,
   onSelectChannel,
+  onBrowsePlans,
   onClose,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -38,6 +34,7 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
   const [directStreamUrl, setDirectStreamUrl] = useState<string>('');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [lockedChannelMsg, setLockedChannelMsg] = useState<string | null>(null);
 
   // Sidebar channel filtering
   const [search, setSearch] = useState('');
@@ -47,6 +44,9 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
     const q = search.trim().toLowerCase();
     return channels
       .filter((ch) => {
+        if (!isActiveSubscriber && !isFreeAzerbaijanGroup(ch.group) && selectedCat === 'ALL' && !q) {
+          return false;
+        }
         if (selectedCat !== 'ALL' && ch.categoryId !== selectedCat) return false;
         if (q) {
           return (
@@ -58,7 +58,7 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
         return true;
       })
       .slice(0, 200);
-  }, [channels, search, selectedCat]);
+  }, [channels, search, selectedCat, isActiveSubscriber]);
 
   useEffect(() => {
     if (!channel || !videoRef.current) return;
@@ -73,11 +73,14 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
     const startPlayback = async () => {
       let candidates: string[] = [];
       let rawUpstream = (channel as ParsedChannelWithUrl).url || '';
+      const isFreeAz = isFreeAzerbaijanGroup(channel.group);
 
       try {
-        const res = await fetch(
-          `/api/channel-stream?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&streamId=${channel.streamId}`
-        );
+        const streamQuery =
+          username && password
+            ? `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&streamId=${channel.streamId}`
+            : `streamId=${channel.streamId}`;
+        const res = await fetch(`/api/channel-stream?${streamQuery}`);
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
           const data = (await res.json()) as {
@@ -106,7 +109,9 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
 
       if (candidates.length === 0) {
         candidates = [
-          `/api/hls-proxy?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&streamId=${channel.streamId}`,
+          isFreeAz
+            ? `/api/hls-proxy?freeAz=1&streamId=${channel.streamId}`
+            : `/api/hls-proxy?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&streamId=${channel.streamId}`,
         ];
       }
 
@@ -214,7 +219,9 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-white truncate">{channel.name}</h3>
               <p className="text-xs text-slate-400 truncate tabular-nums">
-                {channel.group} · Kanal #{channel.chno} · {loading ? statusLabel : errorMsg ? 'Bağlantı xətası' : statusLabel}
+                {channel.group} · Kanal #{channel.chno} ·{' '}
+                {!isActiveSubscriber ? 'Pulsuz Açıq Efir · ' : ''}
+                {loading ? statusLabel : errorMsg ? 'Bağlantı xətası' : statusLabel}
               </p>
             </div>
           </div>
@@ -325,13 +332,49 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+              {lockedChannelMsg && (
+                <div className="p-3 bg-amber-500/10 border-b border-amber-400/30 text-xs space-y-2">
+                  <p className="text-amber-200">{lockedChannelMsg}</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLockedChannelMsg(null);
+                        onClose();
+                        onBrowsePlans();
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 text-slate-950 font-semibold rounded text-[11px] hover:bg-amber-400"
+                    >
+                      Paketləri Seç
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLockedChannelMsg(null)}
+                      className="text-slate-400 hover:text-white text-[11px]"
+                    >
+                      Bağla
+                    </button>
+                  </div>
+                </div>
+              )}
               {filteredChannels.map((ch) => {
                 const isCurrent = ch.streamId === channel.streamId;
+                const chFree = isFreeAzerbaijanGroup(ch.group);
+                const chUnlocked = isActiveSubscriber || chFree;
                 return (
                   <button
                     key={`${ch.streamId}-${ch.chno}`}
                     type="button"
-                    onClick={() => onSelectChannel(ch)}
+                    onClick={() => {
+                      if (chUnlocked) {
+                        setLockedChannelMsg(null);
+                        onSelectChannel(ch);
+                      } else {
+                        setLockedChannelMsg(
+                          `"${ch.name}" kanalı yalnız paket abunəçiləri üçündür. AZƏRBAYCAN kanalları isə pulsuz açıqdır.`
+                        );
+                      }
+                    }}
                     className={`w-full px-3.5 py-2.5 flex items-center justify-between gap-2 text-left transition-colors ${
                       isCurrent
                         ? 'bg-amber-500/15 text-amber-200'
@@ -342,13 +385,16 @@ export const WebPlayerModal: React.FC<WebPlayerModalProps> = ({
                       <p className="text-xs font-medium truncate">{ch.name}</p>
                       <p className="text-[11px] text-slate-400 truncate">
                         {ch.group} · #{ch.chno}
+                        {chFree && !isActiveSubscriber ? ' · Pulsuz' : ''}
                       </p>
                     </div>
-                    {isCurrent && (
+                    {isCurrent ? (
                       <span className="text-[10px] font-medium text-amber-400 shrink-0">
                         İzlənir
                       </span>
-                    )}
+                    ) : !chUnlocked ? (
+                      <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    ) : null}
                   </button>
                 );
               })}

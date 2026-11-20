@@ -744,17 +744,23 @@ async function startServer() {
   app.get('/live/:username/:password/:streamParam', handleLiveStream);
   app.get('/:username/:password/:streamParam([0-9]+(?:\\.(?:m3u8|ts))?)', handleLiveStream);
 
-  // Authenticated stream resolver for active subscribers (returns direct HTTPS + fallback proxy URL)
+  const isFreeAzerbaijanGroup = (group?: string | null): boolean => {
+    if (!group) return false;
+    const upper = group.trim().toUpperCase();
+    return (
+      upper === 'AZƏRBAYCAN' ||
+      upper === 'AZERBAYCAN' ||
+      upper === 'AZERBAIJAN' ||
+      upper.includes('AZƏRBAYCAN') ||
+      upper.includes('AZERBAYCAN')
+    );
+  };
+
+  // Stream resolver for active subscribers and free AZƏRBAYCAN category channels
   app.get('/api/channel-stream', async (req, res) => {
     const username = String(req.query.username || '').trim();
     const password = String(req.query.password || '').trim();
     const streamId = Number(req.query.streamId || 0);
-
-    const account = findAccountByCredentials(username, password);
-    if (!account || !isAccountCurrentlyActive(account)) {
-      res.status(403).json({ error: 'Yayımı izləmək üçün aktiv abunəlik tələb olunur.' });
-      return;
-    }
 
     try {
       const data = await getPlaylistData();
@@ -763,12 +769,25 @@ async function startServer() {
         res.status(404).json({ error: 'Kanal tapılmadı.' });
         return;
       }
+
+      const isFreeChannel = isFreeAzerbaijanGroup(channel.group);
+      if (!isFreeChannel) {
+        const account = findAccountByCredentials(username, password);
+        if (!account || !isAccountCurrentlyActive(account)) {
+          res.status(403).json({ error: 'Yayımı izləmək üçün aktiv abunəlik tələb olunur.' });
+          return;
+        }
+      }
+
       const httpsUrl = channel.url.replace(/^http:\/\//i, 'https://');
-      const proxyUrl = `/api/hls-proxy?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&streamId=${channel.streamId}`;
+      const proxyUrl = isFreeChannel
+        ? `/api/hls-proxy?freeAz=1&streamId=${channel.streamId}`
+        : `/api/hls-proxy?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&streamId=${channel.streamId}`;
       res.json({
         streamId: channel.streamId,
         name: channel.name,
         group: channel.group,
+        isFree: isFreeChannel,
         url: channel.url,
         httpsUrl,
         proxyUrl,
@@ -778,28 +797,66 @@ async function startServer() {
     }
   });
 
-  // HTTPS-safe HLS proxy for in-browser active subscriber player
+  // HTTPS-safe HLS proxy for active subscribers and free AZƏRBAYCAN category channels
   app.get('/api/hls-proxy', async (req, res) => {
     const username = String(req.query.username || '').trim();
     const password = String(req.query.password || '').trim();
     const targetUrl = String(req.query.url || '').trim();
+    const freeAz = String(req.query.freeAz || '') === '1';
     const streamIdParam = req.query.streamId ? Number(req.query.streamId) : null;
 
-    const account = findAccountByCredentials(username, password);
-    if (!account || !isAccountCurrentlyActive(account)) {
-      res.status(403).json({ error: 'Yayımı izləmək üçün aktiv abunəlik tələb olunur.' });
+    let data: { channels: ChannelItem[]; categories: CategoryItem[] };
+    try {
+      data = await getPlaylistData();
+    } catch {
+      res.status(502).json({ error: 'Kanal siyahısı yüklənə bilmədi.' });
       return;
     }
 
+    const account = username && password ? findAccountByCredentials(username, password) : null;
+    const hasActiveSub = Boolean(account && isAccountCurrentlyActive(account));
+
     let upstreamUrl = targetUrl;
+    let isAuthorizedFreeAz = false;
+
     if (streamIdParam) {
-      const data = await getPlaylistData();
       const ch = data.channels.find((c) => c.streamId === streamIdParam);
       if (!ch) {
         res.status(404).json({ error: 'Kanal tapılmadı.' });
         return;
       }
+      isAuthorizedFreeAz = isFreeAzerbaijanGroup(ch.group);
       upstreamUrl = ch.url;
+    }
+
+    if (!hasActiveSub && !isAuthorizedFreeAz) {
+      if (freeAz && upstreamUrl) {
+        try {
+          const parsedTarget = new URL(upstreamUrl);
+          if (parsedTarget.protocol === 'http:' || parsedTarget.protocol === 'https:') {
+            const allowedAzHosts = new Set(
+              data.channels
+                .filter((c) => isFreeAzerbaijanGroup(c.group))
+                .map((c) => {
+                  try {
+                    return new URL(c.url).hostname.toLowerCase();
+                  } catch {
+                    return '';
+                  }
+                })
+                .filter(Boolean)
+            );
+            isAuthorizedFreeAz = allowedAzHosts.has(parsedTarget.hostname.toLowerCase());
+          }
+        } catch {
+          isAuthorizedFreeAz = false;
+        }
+      }
+    }
+
+    if (!hasActiveSub && !isAuthorizedFreeAz) {
+      res.status(403).json({ error: 'Yayımı izləmək üçün aktiv abunəlik tələb olunur.' });
+      return;
     }
 
     if (!upstreamUrl || !/^https?:\/\//i.test(upstreamUrl)) {
@@ -825,6 +882,9 @@ async function startServer() {
       if (isPlaylist) {
         const text = await upstreamRes.text();
         const resolvedBase = new URL(upstreamRes.url || upstreamUrl);
+        const authQuery = hasActiveSub
+          ? `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+          : 'freeAz=1';
         const rewritten = text
           .split('\n')
           .map((line) => {
@@ -834,7 +894,7 @@ async function startServer() {
             }
             try {
               const abs = new URL(trimmed, resolvedBase).toString();
-              return `/api/hls-proxy?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&url=${encodeURIComponent(abs)}`;
+              return `/api/hls-proxy?${authQuery}&url=${encodeURIComponent(abs)}`;
             } catch {
               return line;
             }

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Search, Tv, RefreshCw, ChevronDown, Eye, EyeOff, Play, Lock, Clock } from 'lucide-react';
 import { CategoryItem, ChannelItem } from '../types/iptv';
+import { isFreeAzerbaijanGroup } from '../lib/m3uClient';
 
 interface ChannelDirectoryProps {
   channels: ChannelItem[];
@@ -85,11 +86,11 @@ export const ChannelDirectory: React.FC<ChannelDirectoryProps> = ({
               Abunə olmadan əvvəl bütün kanalları yoxlayın
             </h2>
             <p className="mt-3 text-slate-400 text-sm md:text-base leading-relaxed">
-              Xtream Codes hesabınız aktivləşdirildikdə aşağıdakı canlı yayım mənbəyindəki{' '}
+              <span className="text-emerald-400 font-medium">AZƏRBAYCAN kateqoriyası tam pulsuz və qeydiyyatsızdır</span> — dərhal saytda canlı izləyə bilərsiniz. Digər{' '}
               <span className="text-white font-medium tabular-nums">
                 {channels.length.toLocaleString('az-AZ')}
               </span>{' '}
-              Azərbaycan, Türkiyə, İdman, Kino və Rusiya kanalı avtomatik yüklənir.
+              Türkiyə, İdman, Kino və Rusiya kanalı paketiniz aktivləşdikdə açılır.
             </p>
           </div>
 
@@ -254,6 +255,9 @@ export const ChannelDirectory: React.FC<ChannelDirectoryProps> = ({
                   .slice(0, 2)
                   .toUpperCase();
 
+                const isFreeAz = isFreeAzerbaijanGroup(ch.group);
+                const canWatch = subscriptionState === 'active' || isFreeAz;
+
                 return (
                   <div
                     key={`${ch.streamId}-${ch.chno}`}
@@ -287,13 +291,19 @@ export const ChannelDirectory: React.FC<ChannelDirectoryProps> = ({
                         <span className="truncate">{ch.group}</span>
                         <span aria-hidden="true">·</span>
                         <span className="font-mono tabular-nums shrink-0">#{ch.chno}</span>
+                        {isFreeAz && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-emerald-400 font-medium shrink-0">Pulsuz</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => {
-                        if (subscriptionState === 'active') {
+                        if (canWatch) {
                           setWatchNotice(null);
                           onSelectChannelToWatch(ch);
                         } else {
@@ -304,13 +314,15 @@ export const ChannelDirectory: React.FC<ChannelDirectoryProps> = ({
                         }
                       }}
                       className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded transition-colors shrink-0 ${
-                        subscriptionState === 'active'
-                          ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
-                          : 'bg-[#090B10] text-slate-300 border border-white/15 hover:border-amber-400/50 hover:text-white'
+                        isFreeAz && subscriptionState !== 'active'
+                          ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                          : canWatch
+                            ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+                            : 'bg-[#090B10] text-slate-300 border border-white/15 hover:border-amber-400/50 hover:text-white'
                       }`}
                     >
                       <Play className="w-3 h-3" />
-                      <span>İzlə</span>
+                      <span>{isFreeAz && subscriptionState !== 'active' ? 'Pulsuz İzlə' : 'İzlə'}</span>
                     </button>
                   </div>
                 );

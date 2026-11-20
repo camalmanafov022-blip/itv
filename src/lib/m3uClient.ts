@@ -7,6 +7,18 @@ export interface ParsedChannelWithUrl extends ChannelItem {
   url?: string;
 }
 
+export function isFreeAzerbaijanGroup(group?: string | null): boolean {
+  if (!group) return false;
+  const upper = group.trim().toUpperCase();
+  return (
+    upper === 'AZƏRBAYCAN' ||
+    upper === 'AZERBAYCAN' ||
+    upper === 'AZERBAIJAN' ||
+    upper.includes('AZƏRBAYCAN') ||
+    upper.includes('AZERBAYCAN')
+  );
+}
+
 export function parseM3UClient(rawText: string): {
   channels: ParsedChannelWithUrl[];
   categories: CategoryItem[];
